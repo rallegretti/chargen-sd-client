@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Character Portrait Generator</title>
+    <!-- Include scripts for bootstrap/jquery for formatting and requests -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.2/jquery.min.js" integrity="sha512-tWHlutFnuG0C6nQRlpvrEhE4QpkG1nn2MOUMWmUeRePl4e3Aki0VB6W1v3oLjFtd0hVOtRQ9PHpSfN6u6/QXkQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+
+    <!-- Main Functionality Script -->
+    <script type="text/javascript">
+
+        // Automatically run enclosed code on page load
+        window.onload = () => {
+
+            // This is the URL/IP of the system where Stable Diffusion is running
+            // Note: To allow access to the Automatic1111 api, and from a different host/port,
+            // please run Auto1111 with the arguments:
+            //  --api
+            // (enables generation through api calls)
+            //  and either
+            //  --cors-allow-origins "<host>"
+            //  or
+            //  --cors-allow-origins "*"
+            // (allows access to the API from a different port/host)
+            const baseURL = "http://127.0.0.1:7860";
+
+            // This is the path to the endpoint for retrieving available models
+            // Note: Full interactive API documentation for Auto1111 is available from the
+            // Swagger docs at http://<serverUrl>:<serverPort>/docs# while the server is running
+            const modelPath = "/sdapi/v1/sd-models";
+
+            // This is the path to the endpoint for generating images froma  text prompt
+            const generatePath = "/sdapi/v1/txt2img"
+
+            // Callback to process available generative models from server and add to Select list
+            let availModelsCb = (data, status) => {
+                data.forEach(model => {
+                    $("#modelOption").append('<option value="'+
+                    model.model_name+'">'+
+                    model.model_name+'</option>');
+                });
+            };
+
+            // Callback to process generated image when complete and add to DOM element for display
+            let requestCb = (data) => {
+                console.log(data);
+                $("#genImage").attr("src","data:image/png;base64," + data.images[0]);
+                $("#promptBox").html("");
+                $("#statusBox").html("Image Generation Complete.");
+            }
+            
+            // Create the onClick event for 'Generate' button
+            // Note: Does not execute until button is clicked
+            $("#generateButton").click( () => {
+
+                // Retrieve form contents and store in local vars
+                let model = $("#modelOption").val();
+                let quality = $("input[name=quality]:checked").val()
+                let gender = $("input[name=gender]:checked").val();
+                let kind = $("#kindOption").val();
+                let profession = $("#professionTxt").val();
+
+                // Perform validation and set a default value if not compliant
+                if (profession.length < 3)
+                {
+                    profession = "Wizard"
+                }
+                
+                // Create the prompt string for SD to use. Replacements are:
+                // PARAM1 is replaced with the gender selected
+                // PARAM2 is replaced with the kind selected
+                // PARAM3 is replaced with the entered profession
+                let promptString = "A medieval bust portrait of a PARAM1 PARAM2 PARAM3, wearing PARAM3's clothes, holding PARAM3's tools, surrounded by a black hexagonal frame with silver accents.";
+
+                // Perform replacements
+                promptString = promptString.replace("PARAM1", gender);
+                promptString = promptString.replace("PARAM2", kind);
+                promptString = promptString.replace(/PARAM3/g, profession); // REGEX global replace
+
+                // Create JSON object to be passed to SD with the API call
+                // prompt : the string which SD uses to generate the image
+                // steps : the number of iterations of generation (default is 30)
+                // override_settings : used to change to the selected model at generation time
+                // override_settings_restore_afterward : should the override above be temporary
+                let promptData = {
+                    "prompt": promptString,
+                    "steps": 10,
+                    "override_settings": {
+                        "sd_model_checkpoint": model
+                    },
+                    "override_settings_restore_afterwards": false
+                };
+
+                // If selected, change the 'steps' to reflect a medium or high quality result
+                if (quality == "med") promptData.steps = 14;
+                if (quality == "hi") promptData.steps = 20;
+
+                // Serialize data for request and set status/prompt boxes on page
+                promptData = JSON.stringify(promptData);
+                $("#promptBox").html("Prompt: <br/>"+promptString);
+                $("#statusBox").html("Please wait, generating image...");
+
+                // Make request to SD server
+                // Note: on most home systems this will take at LEAST 30 seconds
+                $.ajax({
+                    url: 'http://127.0.0.1:7860/sdapi/v1/txt2img',
+                    type: 'post',
+                    data: promptData,
+                    headers: {
+                        "content-type":"application/json"
+                    },
+                    dataType: "json",
+                    success: requestCb
+                });
+                
+            }); // end click event
+
+            // Retrieve the available models from the server
+            // Note: This runs automatically on page load
+            $.get("http://127.0.0.1:7860/sdapi/v1/sd-models", availModelsCb);
+
+        } // end window.onload
+
+
+</script>
+</head>
+<body>
+    <div class="container">
+        <form id="genForm">
+            <div class="form-group p-2">
+                <label for="modelOption">AI Model:</label>
+                <select class="form-control" name="model" id="modelOption">
+                </select>
+            </div>
+            <div class="form-group p-2">
+                Quality: 
+                <label for="low" class="p-2">Low (~30s)</label>
+                <input type="radio" class="p-2" name="quality" id="low" value="low" checked>
+                <label for="med" class="p-2">Med (~60s)</label>
+                <input type="radio" class="p-2" name="quality" id="med" value="med">
+                <label for="hi" class="p-2">Hi (~90s+)</label>
+                <input type="radio" name="quality" id="hi" value="hi">
+            </div>
+            <div class="form-group p-2">
+                <label for="male">Male</label>
+                <input type="radio" name="gender" id="male" value="male" checked>
+                <label for="female">Female</label>
+                <input type="radio" name="gender" id="female" value="female">
+            </div>
+            <div class="form-group p-2">
+                <label for="kindOption">Kind:</label>
+                <select class="form-control" name="kind" id="kindOption">
+                    <option value="Human">Human</option>
+                    <option value="Elf">Elf</option>
+                    <option value="Dwarf">Dwarf</option>
+                    <option value="Halfling">Halfling</option>
+                    <option value="Goblin">Goblin</option>
+                    <option value="Orc">Orc</option>
+                </select>
+            </div>
+            <div class="form-group p-2">
+                <label for="professionTxt">Profession</label>
+                <input type="text" class="form-control" name="profession" placeholder="Wizard" id="professionTxt" maxlength="50">
+            </div>
+            <div class="form-group p-2">
+                <button type="button" id="generateButton">Generate Image</button>
+            </div>
+        </form>
+        <div class="row p-2">
+            <div class="col-12 text-center text-bg-warning" id="statusBox">
+                Enter Your Choices
+            </div>
+        </div>
+        <div class="row p-2">
+            <div class="col-1"></div>
+            <div class="col-10 text-center text-bg-info" id="promptBox">
+                Here, have a random placeholder image from Picsum...
+            </div>
+            <div class="col-1"></div>
+        </div>
+        <div class="row p-2">
+            <div class="col-12 align-items-center text-center">
+                <img id="genImage" src="https://picsum.photos/512/512" alt="Generated Image" width="512" />
+            </div>
+        </div>
+    </div>
+</body>
+</html>
