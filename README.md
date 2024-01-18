@@ -5,6 +5,7 @@ This is based on an Automatic1111 deployment running on the same machine that th
 The script is well-documented and changes should be easy to make to suit your deployment needs
 
 Automatic1111 must be run with the command line arguments:
+
 --api   (this enables image generation from API calls)
 
 --cors-allow-origins "*"    (this allows machines on other ports/addresses to access the API without errors)
